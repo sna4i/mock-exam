@@ -4,7 +4,7 @@
 Why this exists
 ---------------
 The quiz-app runtime (Flask + Ollama) lives on the GPU PC, which sleeps
-when idle to save power. The always-on node (pi-calc) — or any machine
+when idle to save power. The always-on node (e.g. a Raspberry Pi) — or any machine
 on the same LAN — sends a Wake-on-LAN "magic packet" to bring the GPU
 PC up before a generation session, then the user hits the app as usual.
 
@@ -13,9 +13,9 @@ bare Raspberry Pi / Debian without ``apt install wakeonlan``.
 
 Usage
 -----
-    python3 wake-gpu.py <MAC> [--broadcast 192.168.10.255] [--port 9]
-    python3 wake-gpu.py 2C-FD-A1-DE-74-DD
-    python3 wake-gpu.py 2C-FD-A1-DE-74-DD --broadcast 192.168.10.255
+    python3 wake-gpu.py <MAC> [--broadcast 192.168.1.255] [--port 9]
+    python3 wake-gpu.py AA-BB-CC-DD-EE-FF
+    python3 wake-gpu.py AA-BB-CC-DD-EE-FF --broadcast 192.168.1.255
 
 MAC accepts ``-``, ``:`` or no separators. The magic packet is sent to
 the broadcast address (default 255.255.255.255) on UDP port 9 (and 7 as
@@ -56,7 +56,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--broadcast", default=os.getenv("GPU_BROADCAST", "255.255.255.255"),
         help="broadcast address (default 255.255.255.255 or $GPU_BROADCAST). "
-             "Prefer the subnet broadcast, e.g. 192.168.10.255.",
+             "Prefer the subnet broadcast, e.g. 192.168.1.255.",
     )
     parser.add_argument("--port", type=int, default=9, help="UDP port (default 9)")
     args = parser.parse_args(argv)

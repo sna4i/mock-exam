@@ -1,17 +1,21 @@
-# systemd unit for the GPU Wake-on-LAN web trigger (runs on pi-calc).
+# systemd unit for the GPU Wake-on-LAN web trigger (runs on the always-on
+# node, e.g. a Raspberry Pi).
 #
 # Install:
-#   sudo cp ~/workspace/quiz-app/scripts/quizgpu-wol.service /etc/systemd/system/
+#   # __USER__ / __HOME__ are filled in with the installing user's values:
+#   sed -e "s|__USER__|$USER|" -e "s|__HOME__|$HOME|" \
+#     ~/workspace/quiz-app/scripts/quizgpu-wol.service \
+#     | sudo tee /etc/systemd/system/quizgpu-wol.service >/dev/null
 #   sudo tee /etc/quizgpu-wol.env >/dev/null <<'EOF'
-#   GPU_MAC=2C-FD-A1-DE-74-DD
-#   GPU_BROADCAST=192.168.10.255
+#   GPU_MAC=AA-BB-CC-DD-EE-FF
+#   GPU_BROADCAST=192.168.1.255
 #   WOL_PORT=8787
 #   # WOL_TOKEN=<任意の秘密文字列>   # 付けると /wake に ?token= が必須
 #   EOF
 #   sudo systemctl daemon-reload && sudo systemctl enable --now quizgpu-wol
 #
-# Then on your phone:  http://192.168.10.14:8787/   (同一LAN)
-#                  or  http://100.106.108.22:8787/  (Tailscale)
+# Then on your phone:  http://<Pi の LAN IP>:8787/        (同一LAN)
+#                  or  http://<Pi の Tailscale IP>:8787/  (Tailscale)
 [Unit]
 Description=quiz-app GPU Wake-on-LAN web trigger
 After=network-online.target
@@ -19,9 +23,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=sna
+User=__USER__
 EnvironmentFile=-/etc/quizgpu-wol.env
-ExecStart=/usr/bin/python3 /home/sna/workspace/quiz-app/scripts/wol_server.py
+ExecStart=/usr/bin/python3 __HOME__/workspace/quiz-app/scripts/wol_server.py
 Restart=on-failure
 RestartSec=3
 # Hardening (it only needs the network to send a broadcast).

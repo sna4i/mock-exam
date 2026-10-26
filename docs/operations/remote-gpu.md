@@ -1,41 +1,43 @@
-# リモート GPU 運用 (pi-calc ↔ GPU-PC)
+# リモート GPU 運用 (Pi ↔ GPU-PC)
 
 quiz-app の AI 生成は **Ollama** に依存する。GPU は GPU-PC 側にしか無いため、
 生成は常に GPU-PC の Ollama (`:11434`) が担う。省電力のため GPU-PC は
 アイドル時スリープし、必要時に **Wake-on-LAN (WoL)** で起こす。
 
-## 構成 (現行: アプリは GPU-PC で稼働 / pi-calc はコード保管 + WoL 送信元)
+> 本書の IP アドレス・MAC アドレスは例。自分の環境の値に置き換える。
+
+## 構成 (現行: アプリは GPU-PC で稼働 / Pi(常時起動ノード)はコード保管 + WoL 送信元)
 
 ```
-                 (同一LAN 192.168.10.0/24)
-  pi-calc (常時起動, ARM)                 GPU-PC (Windows + WSL2, スリープ可)
-  100.106.108.22                          LAN 192.168.10.22
+                 (同一LAN 192.168.1.0/24)
+  Pi (常時起動, ARM)                      GPU-PC (Windows + WSL2, スリープ可)
+  Tailscale 100.x.y.z                     LAN 192.168.1.50
     │                                       ├─ WSL2: docker (backend/frontend)
     │  ① WoL magic packet ───────────────▶ └─ WSL2: ollama :11434 (0.0.0.0)
-    │     (MAC 2C-FD-A1-DE-74-DD 宛)
+    │     (MAC AA-BB-CC-DD-EE-FF 宛)
     │  ② GPU-PC 起動 → WSL/docker/ollama 自動起動
     └─ ③ ブラウザ等で GPU-PC のアプリ/Ollama を利用
 ```
 
-- **WoL 送信元**: `scripts/wake-gpu.py` (依存なし)。pi-calc から実行。
-- **WoL ターゲット**: GPU-PC 物理 NIC `2C-FD-A1-DE-74-DD`
-  (要確認: LAN 192.168.10.22 を持つアダプタの MAC であること。
+- **WoL 送信元**: `scripts/wake-gpu.py` (依存なし)。Pi から実行。
+- **WoL ターゲット**: GPU-PC 物理 NIC `AA-BB-CC-DD-EE-FF`
+  (要確認: LAN 192.168.1.50 を持つアダプタの MAC であること。
   10G `ASUS XG-C100C` と 2.5G オンボードの 2 枚あるため、
   実際に LAN につながっている方の MAC を使う。)
 
-## 1. WoL 送信 (pi-calc 側 — 設定不要、すぐ使える)
+## 1. WoL 送信 (Pi 側 — 設定不要、すぐ使える)
 
 ```bash
-# pi-calc で
-python3 ~/workspace/quiz-app/scripts/wake-gpu.py 2C-FD-A1-DE-74-DD \
-  --broadcast 192.168.10.255
+# Pi で
+python3 ~/workspace/quiz-app/scripts/wake-gpu.py AA-BB-CC-DD-EE-FF \
+  --broadcast 192.168.1.255
 ```
 
 env で固定しておくと cron / エイリアスから引数なしで叩ける:
 
 ```bash
-export GPU_MAC=2C-FD-A1-DE-74-DD
-export GPU_BROADCAST=192.168.10.255
+export GPU_MAC=AA-BB-CC-DD-EE-FF
+export GPU_BROADCAST=192.168.1.255
 python3 ~/workspace/quiz-app/scripts/wake-gpu.py
 ```
 
@@ -71,7 +73,7 @@ WoL で Windows が起きても、WSL2 / docker / ollama が自動で上がら�
 - **ollama コンテナ**: `restart: unless-stopped` (compose 既設) + Docker
   Desktop の「ログイン時に起動」。
 - **WSL 自動起動**: Windows タスクスケジューラで *スタートアップ時* に
-  `wsl -d Ubuntu -u sna -e sh -c "cd ~/workspace/quiz-app && docker compose up -d"`
+  `wsl -d Ubuntu -e sh -c "cd ~/workspace/quiz-app && docker compose up -d"`
   を実行する (トリガ: ログオン / システム起動)。
 - 補足: WSL はログオンしないと起動しないため、**自動ログオン** か
   Windows サービス化 (例: NSSM で `wsl ...` を常駐) を検討。
@@ -100,25 +102,26 @@ cmd /c %USERPROFILE%\...\quiz-app\scripts\install-resume-task.cmd
 REM 手動テスト
 schtasks /Run /TN "quizgpu-resume-restart"
 REM 確認 (heal ログに新エントリが出れば チェーン成立)
-wsl -d Ubuntu -u sna -e tail -5 ~/.cache/quizgpu-resume-heal.log
+wsl -d Ubuntu -e tail -5 ~/.cache/quizgpu-resume-heal.log
 REM 削除
 schtasks /Delete /TN "quizgpu-resume-restart" /F
 ```
 
-> 注: `install-resume-task.cmd` は GPU-PC 固有値 (`/RU t4k1h`,
-> `-d Ubuntu`, `-u sna`, repo パス) をハードコード。別機では編集する。
+> 注: `install-resume-task.cmd` は先頭の `set` 行 (WSL のディストリ名・WSL 内の
+> repo の場所) を環境に合わせて編集する。タスクは実行した Windows ユーザーで、
+> WSL は既定ユーザーで動く。
 > WoL → 起床 → このタスクが ~15-60 秒で quiz-app を復旧、という流れ。
 > より根本的に直すなら WSL の `networkingMode=mirrored` (§本書末尾の
 > 検討メモ参照: resume 耐性 + Tailscale 直結も同時に解決)。
 
-## 4. (任意) pi-calc から GPU-PC の Ollama を直接叩く場合
+## 4. (任意) Pi から GPU-PC の Ollama を直接叩く場合
 
-将来 pi-calc 上でアプリを動かす構成にするなら、backend の
+将来 Pi 上でアプリを動かす構成にするなら、backend の
 `OLLAMA_BASE_URL` を GPU-PC に向ける:
 
 ```bash
-# pi-calc の .env など
-OLLAMA_BASE_URL=http://192.168.10.22:11434     # 同一LAN直
+# Pi の .env など
+OLLAMA_BASE_URL=http://192.168.1.50:11434     # 同一LAN直
 # または Tailscale 経由 (要: WSL/Windows いずれかの tailscale で 11434 到達性)
 # OLLAMA_BASE_URL=http://<gpu-pc-tailscale-ip>:11434
 ```
@@ -127,7 +130,7 @@ OLLAMA_BASE_URL=http://192.168.10.22:11434     # 同一LAN直
 > Tailscale 越しに WSL 内 Ollama へ入るには (a) WSL で `tailscale up` する、
 > もしくは (b) Windows 側で `netsh interface portproxy` により
 > 11434 を WSL に転送する、のいずれかが要る。同一 LAN なら
-> `192.168.10.22:11434` 直が一番手っ取り早い (Ollama は 0.0.0.0 待受済)。
+> `192.168.1.50:11434` 直が一番手っ取り早い (Ollama は 0.0.0.0 待受済)。
 
 ## 5. セキュリティ memo
 - Ollama は現在 `0.0.0.0:11434` 待受 = LAN 全体から到達可能。
@@ -137,8 +140,8 @@ OLLAMA_BASE_URL=http://192.168.10.22:11434     # 同一LAN直
 ## 7. WSL mirrored networking (LAN/tailnet から WSL 内サービスへ到達)
 
 既定の WSL2 は NAT で、WSL 内サービス (quiz-app :1234/:4321, Ollama
-:11434) は GPU-PC の localhost からしか見えず、他機 (スマホ/pi-calc)
-から `192.168.10.22:xxxx` に入れない (実測 000)。`networkingMode=mirrored`
+:11434) は GPU-PC の localhost からしか見えず、他機 (スマホ/Pi)
+から `192.168.1.50:xxxx` に入れない (実測 000)。`networkingMode=mirrored`
 で WSL を Windows と同じネット名前空間に寄せ、Windows の LAN/Tailscale
 IF にそのまま露出させる。
 
@@ -170,13 +173,13 @@ build 26200 / WSL 2.7.3 で対応。
 
 4. 復帰 + アプリ起動:
    ```
-   wsl -d Ubuntu -u sna -e bash -lc "cd ~/workspace/quiz-app && docker compose -f docker-compose.yml up -d"
+   wsl -d Ubuntu -e bash -lc "cd ~/workspace/quiz-app && docker compose -f docker-compose.yml up -d"
    ```
 
 5. 確認:
-   - WSL 内: `ip -4 addr` に 192.168.10.22 (mirrored) が出る (旧 172.20.x が消える)
-   - スマホ: `http://192.168.10.22:1234/`
-   - pi-calc: `curl http://192.168.10.22:11434/api/tags`
+   - WSL 内: `ip -4 addr` に 192.168.1.50 (mirrored) が出る (旧 172.20.x が消える)
+   - スマホ: `http://192.168.1.50:1234/`
+   - Pi: `curl http://192.168.1.50:11434/api/tags`
 
 ### 元に戻す
 `.wslconfig` を `.bak.*` から復元 → `wsl --shutdown` → 復帰。
@@ -185,6 +188,6 @@ build 26200 / WSL 2.7.3 で対応。
 - Docker Desktop が稼働している前提 (再起動後にコンテナ復帰)。
 - mirrored 後は §3-1 の resume-heal の必要性も下がる (port-proxy 経由
   でなくなるため) が、入れておいて害はない。
-- pi-calc → Ollama を Tailscale 経由にするなら、Windows か WSL の
+- Pi → Ollama を Tailscale 経由にするなら、Windows か WSL の
   どちらかで Tailscale を起動 (mirrored なら WSL で `tailscale up`
   しても Windows IF 経由で出る)。
