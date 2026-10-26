@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Tiny web trigger to wake the GPU PC from a phone (stdlib only).
 
-Runs on the always-on node (pi-calc). Open the page on your phone and
+Runs on the always-on node (e.g. a Raspberry Pi). Open the page on your phone and
 tap a button; it fires a Wake-on-LAN magic packet at the GPU PC. No
 pip install — pure ``http.server`` + the shared ``wol`` core.
 
 Config (env, typically via the systemd EnvironmentFile):
-    GPU_MAC        target MAC (required), e.g. 2C-FD-A1-DE-74-DD
+    GPU_MAC        target MAC (required), e.g. AA-BB-CC-DD-EE-FF
     GPU_BROADCAST  subnet broadcast (default 255.255.255.255),
-                   recommended 192.168.10.255
+                   e.g. 192.168.1.255 (recommended)
     WOL_BIND       listen address (default 0.0.0.0)
     WOL_PORT       listen port (default 8787)
     WOL_TOKEN      optional shared secret. When set, /wake requires
