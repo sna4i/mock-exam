@@ -206,7 +206,7 @@ contain whatever the user submits. Treat the SQLite volume as sensitive.
 ## 9. Reporting a vulnerability
 
 Please open a **private** security advisory on the GitHub repository:
-`https://github.com/yuya4i/mock-exam/security/advisories/new`.
+`https://github.com/sna4i/mock-exam/security/advisories/new`.
 
 If that channel is unavailable, open a regular issue with the **minimum** detail
 needed to coordinate disclosure; the maintainer will reply with a private

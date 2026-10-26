@@ -211,7 +211,7 @@ GitHub branch protection rule.
 ## 9. Filing a security report
 
 Open a private GitHub Security Advisory:
-<https://github.com/yuya4i/mock-exam/security/advisories/new>.
+<https://github.com/sna4i/mock-exam/security/advisories/new>.
 
 If that channel is unavailable, open a regular issue with the minimum
 context needed to coordinate disclosure. See [`SECURITY.md`](../../SECURITY.md)
